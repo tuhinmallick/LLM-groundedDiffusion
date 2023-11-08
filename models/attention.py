@@ -98,7 +98,10 @@ class BasicTransformerBlock(nn.Module):
         self.use_ada_layer_norm_zero = (num_embeds_ada_norm is not None) and norm_type == "ada_norm_zero"
         self.use_ada_layer_norm = (num_embeds_ada_norm is not None) and norm_type == "ada_norm"
 
-        if norm_type in ("ada_norm", "ada_norm_zero") and num_embeds_ada_norm is None:
+        if (
+            norm_type in {"ada_norm", "ada_norm_zero"}
+            and num_embeds_ada_norm is None
+        ):
             raise ValueError(
                 f"`norm_type` is set to {norm_type}, but `num_embeds_ada_norm` is not defined. Please make sure to"
                 f" define `num_embeds_ada_norm` if setting `norm_type` to {norm_type}."
@@ -263,15 +266,15 @@ class FeedForward(nn.Module):
         inner_dim = int(dim * mult)
         dim_out = dim_out if dim_out is not None else dim
 
-        if activation_fn == "gelu":
-            act_fn = GELU(dim, inner_dim)
-        if activation_fn == "gelu-approximate":
-            act_fn = GELU(dim, inner_dim, approximate="tanh")
-        elif activation_fn == "geglu":
+        if activation_fn == "geglu":
             act_fn = GEGLU(dim, inner_dim)
         elif activation_fn == "geglu-approximate":
             act_fn = ApproximateGELU(dim, inner_dim)
 
+        elif activation_fn == "gelu":
+            act_fn = GELU(dim, inner_dim)
+        elif activation_fn == "gelu-approximate":
+            act_fn = GELU(dim, inner_dim, approximate="tanh")
         self.net = nn.ModuleList([])
         # project in
         self.net.append(act_fn)

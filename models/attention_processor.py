@@ -396,14 +396,20 @@ class AttnProcessor:
         save_attn_to_dict: pass in a dict to save to dict
         """
         cross_attn = encoder_hidden_states is not None
-        
-        if (not cross_attn) or (
-            (attn_process_fn is None) 
-            and not (save_attn_to_dict is not None and (save_keys is None or (tuple(attn_key) in save_keys))) 
-            and not return_attntion_probs):
+
+        if (
+            not cross_attn
+            or attn_process_fn is None
+            and (
+                save_attn_to_dict is None
+                or save_keys is not None
+                and tuple(attn_key) not in save_keys
+            )
+            and not return_attntion_probs
+        ):
             with torch.backends.cuda.sdp_kernel(enable_flash=enable_flash_attn, enable_math=True, enable_mem_efficient=enable_flash_attn):
                 return self.__call_fast__(attn, hidden_states, encoder_hidden_states, attention_mask, temb)
-        
+
         residual = hidden_states
 
         if attn.spatial_norm is not None:
@@ -476,10 +482,10 @@ class AttnProcessor:
                 attention_probs_unflattened = attention_probs_unflattened[batch_size // 2:]
             if offload_cross_attn_to_cpu:
                 attention_probs_unflattened = attention_probs_unflattened.cpu()
-            if save_attn_to_dict is not None and (save_keys is None or (tuple(attn_key) in save_keys)):
-                save_attn_to_dict[tuple(attn_key)] = attention_probs_unflattened
-            if return_attntion_probs:
-                return hidden_states, attention_probs_unflattened
+        if save_attn_to_dict is not None and (save_keys is None or (tuple(attn_key) in save_keys)):
+            save_attn_to_dict[tuple(attn_key)] = attention_probs_unflattened
+        if return_attntion_probs:
+            return hidden_states, attention_probs_unflattened
         return hidden_states
 
 # For typing
@@ -504,5 +510,4 @@ class SpatialNorm(nn.Module):
         f_size = f.shape[-2:]
         zq = F.interpolate(zq, size=f_size, mode="nearest")
         norm_f = self.norm_layer(f)
-        new_f = norm_f * self.conv_y(zq) + self.conv_b(zq)
-        return new_f
+        return norm_f * self.conv_y(zq) + self.conv_b(zq)

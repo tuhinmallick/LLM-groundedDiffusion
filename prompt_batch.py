@@ -17,7 +17,7 @@ else:
     print("Not scaling the bounding box to fit the scene")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser() 
+    parser = argparse.ArgumentParser()
     parser.add_argument("--prompt-type", choices=prompt_types, default="demo")
     parser.add_argument("--model", choices=model_names, required=True)
     parser.add_argument("--template_version", choices=template_versions, required=True)
@@ -26,11 +26,11 @@ if __name__ == "__main__":
     parser.add_argument("--no-visualize", action='store_true', help='No visualizations')
     parser.add_argument("--visualize-cache-hit", action='store_true', help='Save boxes for cache hit')
     args = parser.parse_args()
-    
+
     visualize_cache_hit = args.visualize_cache_hit
-    
+
     template_version = args.template_version
-    
+
     model, llm_kwargs = get_llm_kwargs(
         model=args.model, template_version=template_version)
     template = llm_kwargs.template
@@ -40,7 +40,7 @@ if __name__ == "__main__":
     if not args.no_visualize:
         os.makedirs(parse.img_dir, exist_ok=True)
 
-    cache.cache_path = f'cache/cache_{args.prompt_type.replace("lmd_", "")}{"_" + template_version if args.template_version != "v5" else ""}_{model}.json'
+    cache.cache_path = f'cache/cache_{args.prompt_type.replace("lmd_", "")}{f"_{template_version}" if args.template_version != "v5" else ""}_{model}.json'
     print(f"Cache: {cache.cache_path}")
     os.makedirs(os.path.dirname(cache.cache_path), exist_ok=True)
     cache.cache_format = "json"
@@ -48,31 +48,31 @@ if __name__ == "__main__":
     cache.init_cache()
 
     prompts_query = get_prompts(args.prompt_type, model=model)
-    
+
     for ind, prompt in enumerate(prompts_query):
         if isinstance(prompt, list):
             # prompt, seed
             prompt = prompt[0]
         prompt = prompt.strip().rstrip(".")
-        
+
         response = cache.get_cache(prompt)
         if response is None:
             print(f"Cache miss: {prompt}")
-            
+
             if not args.auto_query:
                 print("#########")
                 prompt_full = get_full_prompt(template=template, prompt=prompt)
                 print(prompt_full, end="")
                 print("#########")
                 resp = None
-            
+
             attempts = 0
             while True:
                 attempts += 1
                 if args.auto_query:
                     resp = get_layout(prompt=prompt, llm_kwargs=llm_kwargs)
                     print("Response:", resp)
-                
+
                 try:
                     parsed_input = parse_input_with_negative(text=resp, no_input=args.auto_query)
                     if parsed_input is None:
@@ -85,18 +85,15 @@ if __name__ == "__main__":
                     print(f"Encountered invalid data with prompt {prompt} and response {resp}: {e}, retrying")
                     time.sleep(10)
                     continue
-                
+
                 gen_boxes = [{'name': box[0], 'bounding_box': box[1]} for box in raw_gen_boxes]
                 gen_boxes = filter_boxes(gen_boxes, scale_boxes=scale_boxes)
                 if not args.no_visualize:
                     show_boxes(gen_boxes, bg_prompt=bg_prompt, neg_prompt=neg_prompt, ind=ind)
                     plt.clf()
                     print(f"Visualize masks at {parse.img_dir}")
-                if not args.always_save:
-                    save = input("Save (y/n)? ").strip()
-                else:
-                    save = "y"
-                if save == "y" or save == "Y":
+                save = input("Save (y/n)? ").strip() if not args.always_save else "y"
+                if save in ["y", "Y"]:
                     response = f"{raw_gen_boxes}\n{bg_prompt_text}{bg_prompt}\n{neg_prompt_text}{neg_prompt}"
                     cache.add_cache(prompt, response)
                 else:
@@ -105,10 +102,10 @@ if __name__ == "__main__":
                 break
         else:
             print(f"Cache hit: {prompt}")
-            
+
             if visualize_cache_hit:
                 raw_gen_boxes, bg_prompt, neg_prompt = parse_input_with_negative(text=response)
-                
+
                 gen_boxes = [{'name': box[0], 'bounding_box': box[1]} for box in raw_gen_boxes]
                 gen_boxes = filter_boxes(gen_boxes, scale_boxes=scale_boxes)
                 show_boxes(gen_boxes, bg_prompt=bg_prompt, neg_prompt=neg_prompt, ind=ind)

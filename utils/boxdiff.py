@@ -111,10 +111,7 @@ def _compute_loss(max_attention_per_index_fg: List[torch.Tensor], max_attention_
 
     # print(f"{losses_fg}, {losses_bg}, {dist_x}, {dist_y}, {loss}")
 
-    if return_losses:
-        return max(losses_fg), losses_fg
-    else:
-        return max(losses_fg), loss
+    return (max(losses_fg), losses_fg) if return_losses else (max(losses_fg), loss)
 
 
 def compute_ca_loss_boxdiff(saved_attn, bboxes, object_positions, guidance_attn_keys, ref_ca_saved_attns=None, ref_ca_last_token_only=True, ref_ca_word_token_only=False, word_token_indices=None, index=None, ref_ca_loss_weight=1.0, verbose=False, **kwargs):
@@ -226,29 +223,11 @@ def latent_backward_guidance_boxdiff(scheduler, unet, cond_embeddings, index, bb
 
         latents.requires_grad_(False)
 
-        if True:
-            warnings.warn("Using guidance scaled with sqrt scale")
-            # According to boxdiff's implementation: https://github.com/Sierkinhane/BoxDiff/blob/16ffb677a9128128e04553a0200870a526731be0/pipeline/sd_pipeline_boxdiff.py#L616
-            scale = (scale_range[0] + (scale_range[1] - scale_range[0])
-                     * index / (len(scheduler.timesteps) - 1)) ** (0.5)
-            latents = latents - latent_scale * scale / amp_loss_scale * grad_cond
-        elif hasattr(scheduler, 'sigmas'):
-            warnings.warn("Using guidance scaled with sigmas")
-            scale = scheduler.sigmas[index] ** 2
-            latents = latents - grad_cond * scale
-        elif hasattr(scheduler, 'alphas_cumprod'):
-            warnings.warn("Using guidance scaled with alphas_cumprod")
-            # Scaling with classifier guidance
-            alpha_prod_t = scheduler.alphas_cumprod[t]
-            # Classifier guidance: https://arxiv.org/pdf/2105.05233.pdf
-            # DDIM: https://arxiv.org/pdf/2010.02502.pdf
-            scale = (1 - alpha_prod_t) ** (0.5)
-            latents = latents - latent_scale * scale / amp_loss_scale * grad_cond
-        else:
-            warnings.warn("No scaling in guidance is performed")
-            scale = 1
-            latents = latents - grad_cond
-
+        warnings.warn("Using guidance scaled with sqrt scale")
+        # According to boxdiff's implementation: https://github.com/Sierkinhane/BoxDiff/blob/16ffb677a9128128e04553a0200870a526731be0/pipeline/sd_pipeline_boxdiff.py#L616
+        scale = (scale_range[0] + (scale_range[1] - scale_range[0])
+                 * index / (len(scheduler.timesteps) - 1)) ** (0.5)
+        latents = latents - latent_scale * scale / amp_loss_scale * grad_cond
         gc.collect()
         torch.cuda.empty_cache()
 

@@ -334,8 +334,7 @@ def run(
     # Note that so and overall use different negative prompts
 
     with torch.autocast("cuda", enabled=use_autocast):
-        so_prompts = [item[0] for item in so_prompt_phrase_word_box_list]
-        if so_prompts:
+        if so_prompts := [item[0] for item in so_prompt_phrase_word_box_list]:
             so_input_embeddings = models.encode_prompts(
                 prompts=so_prompts,
                 tokenizer=tokenizer,

@@ -33,7 +33,7 @@ def get_phrase_indices(tokenizer, prompt, phrases, verbose=False, words=None, in
     for obj in phrases:
         # Suffix the prompt with object name for attention guidance if object is not in the prompt, using "|" to separate the prompt and the suffix
         if obj not in prompt:
-            prompt += "| " + obj
+            prompt += f"| {obj}"
 
     if token_map is None:
         # We allow using a pre-computed token map.
@@ -48,10 +48,10 @@ def get_phrase_indices(tokenizer, prompt, phrases, verbose=False, words=None, in
         phrase_token_map = phrase_token_map[1:-1]
         phrase_token_map_len = len(phrase_token_map)
         phrase_token_map_str = " ".join(phrase_token_map)
-        
+
         if verbose:
             print("Full str:", token_map_str, "Substr:", phrase_token_map_str, "Phrase:", phrases)
-        
+
         # Count the number of token before substr
         # The substring comes with a trailing space that needs to be removed by minus one in the index.
         obj_first_index = len(token_map_str[:token_map_str.index(phrase_token_map_str)-1].split(" "))
@@ -60,7 +60,7 @@ def get_phrase_indices(tokenizer, prompt, phrases, verbose=False, words=None, in
         if include_eos:
             obj_position.append(token_map.index(tokenizer.eos_token))
         object_positions.append(obj_position)
-        
+
         if return_word_token_indices:
             # Picking the last token in the specification
             if words is None:
@@ -75,7 +75,7 @@ def get_phrase_indices(tokenizer, prompt, phrases, verbose=False, words=None, in
 
             if verbose:
                 print("so_token_index:", so_token_index)
-            
+
             word_token_indices.append(so_token_index)
 
     if return_word_token_indices:

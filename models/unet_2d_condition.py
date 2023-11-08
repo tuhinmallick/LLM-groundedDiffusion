@@ -110,8 +110,7 @@ class PositionNet(nn.Module):
         positive_embeddings = positive_embeddings * masks + (1 - masks) * positive_null
         xyxy_embedding = xyxy_embedding * masks + (1 - masks) * xyxy_null
 
-        objs = self.linears(torch.cat([positive_embeddings, xyxy_embedding], dim=-1))
-        return objs
+        return self.linears(torch.cat([positive_embeddings, xyxy_embedding], dim=-1))
 
 
 

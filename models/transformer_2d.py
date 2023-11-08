@@ -193,7 +193,7 @@ class Transformer2DModel(ModelMixin, ConfigMixin):
                     norm_elementwise_affine=norm_elementwise_affine,
                     use_gated_attention=use_gated_attention,
                 )
-                for d in range(num_layers)
+                for _ in range(num_layers)
             ]
         )
 

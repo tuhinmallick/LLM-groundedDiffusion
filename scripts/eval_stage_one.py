@@ -64,7 +64,7 @@ if __name__ == "__main__":
         eval_type, eval_success = eval_prompt(
             prompt, args.prompt_type, gen_boxes, verbose=args.verbose)
 
-        print(f"Eval success (eval_type):", eval_success)
+        print("Eval success (eval_type):", eval_success)
 
         if eval_type not in eval_all_counts:
             eval_success_counts[eval_type] = 0
@@ -73,7 +73,7 @@ if __name__ == "__main__":
         eval_all_counts[eval_type] += 1
 
     eval_success_conut, eval_all_count = 0, 0
-    for k, v in eval_all_counts.items():
+    for k in eval_all_counts:
         print(
             f"Eval type: {k}, success: {eval_success_counts[k]}/{eval_all_counts[k]}, rate: {eval_success_counts[k]/eval_all_counts[k]:.2f}")
         eval_success_conut += eval_success_counts[k]
@@ -81,9 +81,3 @@ if __name__ == "__main__":
 
     print(
         f"Overall: success: {eval_success_conut}/{eval_all_count}, rate: {eval_success_conut/eval_all_count:.2f}")
-
-    if False:
-        # Print what are accessed in the cache (may have multiple values in each key)
-        # Not including the newly added items
-        print(json.dumps(cache.cache_queries))
-        print("Number of accessed keys:", len(cache.cache_queries))

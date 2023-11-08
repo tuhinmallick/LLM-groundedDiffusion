@@ -36,7 +36,7 @@ def run(prompt, seed=100, extra_neg_prompt=""):
     generator = torch.Generator("cuda").manual_seed(seed)
 
     if extra_neg_prompt:
-        full_bg_negative = extra_neg_prompt + ", " + bg_negative
+        full_bg_negative = f"{extra_neg_prompt}, {bg_negative}"
     else:
         full_bg_negative = bg_negative
 

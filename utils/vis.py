@@ -226,14 +226,14 @@ def display(image, save_prefix="", ind=None, save_ind_in_filename=True):
     """
     global save_ind
     if save_prefix != "":
-        save_prefix = save_prefix + "_"
+        save_prefix = f"{save_prefix}_"
     if save_ind_in_filename:
         ind = f"{ind}_" if ind is not None else ""
         path = f"{parse.img_dir}/{save_prefix}{ind}{save_ind}.png"
     else:
         ind = f"{ind}" if ind is not None else ""
         path = f"{parse.img_dir}/{save_prefix}{ind}.png"
-    
+
     print(f"Saved to {path}")
 
     if isinstance(image, np.ndarray):

@@ -50,7 +50,7 @@ class MultiDiffusion(nn.Module):
         self.device = device
         self.sd_version = sd_version
 
-        print(f"[INFO] loading stable diffusion...")
+        print("[INFO] loading stable diffusion...")
         if hf_key is not None:
             print(f"[INFO] using hugging face custom model key: {hf_key}")
             model_key = hf_key
@@ -87,7 +87,7 @@ class MultiDiffusion(nn.Module):
 
         self.batch_size = batch_size
 
-        print(f"[INFO] loaded stable diffusion!")
+        print("[INFO] loaded stable diffusion!")
 
     @torch.no_grad()
     def unet_batch(self, latent_model_input, t, encoder_hidden_states):
@@ -147,8 +147,7 @@ class MultiDiffusion(nn.Module):
     def encode_imgs(self, imgs):
         imgs = 2 * imgs - 1
         posterior = self.vae.encode(imgs).latent_dist
-        latents = posterior.sample() * 0.18215
-        return latents
+        return posterior.sample() * 0.18215
 
     @torch.no_grad()
     def decode_latents(self, latents):
@@ -281,8 +280,7 @@ class MultiDiffusion(nn.Module):
 
         # Img latents -> imgs
         imgs = self.decode_latents(latent)  # [1, 3, 512, 512]
-        img = T.ToPILImage()(imgs[0].cpu())
-        return img
+        return T.ToPILImage()(imgs[0].cpu())
 
 
 def preprocess_mask(mask_path, h, w, device):
@@ -371,8 +369,8 @@ def run(
     show_boxes(gen_boxes, bg_prompt=bg_prompt)
 
     if extra_neg_prompt:
-        full_bg_negative = extra_neg_prompt + ", " + bg_negative
-        full_fg_negative_prompt = extra_neg_prompt + ", " + fg_negative_prompt
+        full_bg_negative = f"{extra_neg_prompt}, {bg_negative}"
+        full_fg_negative_prompt = f"{extra_neg_prompt}, {fg_negative_prompt}"
     else:
         full_bg_negative = bg_negative
         full_fg_negative_prompt = fg_negative_prompt
@@ -417,7 +415,7 @@ def run(
         bg_mask = 1 - torch.sum(fg_masks, dim=0, keepdim=True)
     else:
         print(f"bg weight in box is {bg_weight}")
-        bg_mask = torch.ones_like(fg_masks[0:1]) * bg_weight
+        bg_mask = torch.ones_like(fg_masks[:1]) * bg_weight
     bg_mask[bg_mask < 0] = 0
     masks = torch.cat([bg_mask, fg_masks])
 
