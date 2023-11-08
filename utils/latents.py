@@ -8,14 +8,11 @@ def get_unscaled_latents(batch_size, in_channels, height, width, generator, dtyp
     """
     in_channels: often obtained with `unet.config.in_channels`
     """
-    # Obtain with torch.float32 and cast to float16 if needed
-    # Directly obtaining latents in float16 will lead to different latents
-    latents_base = torch.randn(
+    return torch.randn(
         (batch_size, in_channels, height // 8, width // 8),
-        generator=generator, dtype=dtype
+        generator=generator,
+        dtype=dtype,
     ).to(torch_device, dtype=dtype)
-    
-    return latents_base
 
 def get_scaled_latents(batch_size, in_channels, height, width, generator, dtype, scheduler):
     latents_base = get_unscaled_latents(batch_size, in_channels, height, width, generator, dtype)

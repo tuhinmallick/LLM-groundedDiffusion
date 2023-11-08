@@ -15,32 +15,28 @@ DEFAULT_GUIDANCE_ATTN_KEYS = [("mid", 0, 0, 0), ("up", 1, 0, 0), ("up", 1, 1, 0)
 
 def latent_backward_guidance(scheduler, unet, cond_embeddings, index, bboxes, object_positions, t, latents, loss, loss_scale = 30, loss_threshold = 0.2, max_iter = 5, max_index_step = 10, cross_attention_kwargs=None, ref_ca_saved_attns=None, guidance_attn_keys=None, verbose=False, clear_cache=False, **kwargs):
 
-    iteration = 0
-    
     if index < max_index_step:
         if isinstance(max_iter, list):
-            if len(max_iter) > index:
-                max_iter = max_iter[index]
-            else:
-                max_iter = max_iter[-1]
-        
+            max_iter = max_iter[index] if len(max_iter) > index else max_iter[-1]
         if verbose:
             print(f"time index {index}, loss: {loss.item()/loss_scale:.3f} (de-scaled with scale {loss_scale:.1f}), loss threshold: {loss_threshold:.3f}")
-        
+
+        iteration = 0
+
         while (loss.item() / loss_scale > loss_threshold and iteration < max_iter and index < max_index_step):
             saved_attn = {}
             full_cross_attention_kwargs = {
                 'save_attn_to_dict': saved_attn,
                 'save_keys': guidance_attn_keys,
             }
-            
+
             if cross_attention_kwargs is not None:
                 full_cross_attention_kwargs.update(cross_attention_kwargs)
-            
+
             latents.requires_grad_(True)
             latent_model_input = latents
             latent_model_input = scheduler.scale_model_input(latent_model_input, t)
-            
+
             unet(latent_model_input, t, encoder_hidden_states=cond_embeddings, return_cross_attention_probs=False, cross_attention_kwargs=full_cross_attention_kwargs)
 
             # TODO: could return the attention maps for the required blocks only and not necessarily the final output
@@ -56,7 +52,7 @@ def latent_backward_guidance(scheduler, unet, cond_embeddings, index, bboxes, ob
             grad_cond = torch.autograd.grad(loss.requires_grad_(True), [latents])[0]
 
             latents.requires_grad_(False)
-            
+
             if hasattr(scheduler, 'sigmas'):
                 latents = latents - grad_cond * scheduler.sigmas[index] ** 2
             elif hasattr(scheduler, 'alphas_cumprod'):
@@ -72,13 +68,13 @@ def latent_backward_guidance(scheduler, unet, cond_embeddings, index, bboxes, ob
                 warnings.warn("No scaling in guidance is performed")
                 latents = latents - grad_cond
             iteration += 1
-            
+
             if clear_cache:
                 utils.free_memory()
-            
+
             if verbose:
                 print(f"time index {index}, loss: {loss.item()/loss_scale:.3f}, loss threshold: {loss_threshold:.3f}, iteration: {iteration}")
-            
+
     return latents, loss
 
 @torch.no_grad()
@@ -119,12 +115,10 @@ def decode(vae, latents):
     scaled_latents = 1 / 0.18215 * latents
     with torch.no_grad():
         image = vae.decode(scaled_latents).sample
-        
+
     image = (image / 2 + 0.5).clamp(0, 1)
     image = image.detach().cpu().permute(0, 2, 3, 1).numpy()
-    images = (image * 255).round().astype("uint8")
-    
-    return images
+    return (image * 255).round().astype("uint8")
 
 def generate_semantic_guidance(model_dict, latents, input_embeddings, num_inference_steps, bboxes, phrases, object_positions, guidance_scale = 7.5, semantic_guidance_kwargs=None, 
                            return_cross_attn=False, return_saved_cross_attn=False, saved_cross_attn_keys=None, return_cond_ca_only=False, return_token_ca_only=None, offload_guidance_cross_attn_to_cpu=False,
@@ -136,21 +130,17 @@ def generate_semantic_guidance(model_dict, latents, input_embeddings, num_infere
     """
     vae, tokenizer, text_encoder, unet, scheduler, dtype = model_dict.vae, model_dict.tokenizer, model_dict.text_encoder, model_dict.unet, model_dict.scheduler, model_dict.dtype
     text_embeddings, uncond_embeddings, cond_embeddings = input_embeddings
-    
+
     # Just in case that we have in-place ops
     latents = latents.clone()
-    
+
     if save_all_latents:
         # offload to cpu to save space
-        if offload_latents_to_cpu:
-            latents_all = [latents.cpu()]
-        else:
-            latents_all = [latents]
-    
+        latents_all = [latents.cpu()] if offload_latents_to_cpu else [latents]
     scheduler.set_timesteps(num_inference_steps)
     if fast_after_steps is not None:
         scheduler.timesteps = schedule.get_fast_schedule(scheduler.timesteps, fast_after_steps, fast_rate)
-    
+
     if dynamic_num_inference_steps:
         original_num_inference_steps = scheduler.num_inference_steps
 
@@ -166,48 +156,48 @@ def generate_semantic_guidance(model_dict, latents, input_embeddings, num_infere
         'offload_cross_attn_to_cpu': offload_guidance_cross_attn_to_cpu,
         'enable_flash_attn': False
     }
-    
+
     if return_saved_cross_attn:
         saved_attns = []
-    
+
     main_cross_attention_kwargs = {
         'offload_cross_attn_to_cpu': offload_cross_attn_to_cpu,
         'return_cond_ca_only': return_cond_ca_only,
         'return_token_ca_only': return_token_ca_only,
         'save_keys': saved_cross_attn_keys,
     }
-    
+
     # Repeating keys leads to different weights for each key.
     # assert len(set(semantic_guidance_kwargs['guidance_attn_keys'])) == len(semantic_guidance_kwargs['guidance_attn_keys']), f"guidance_attn_keys not unique: {semantic_guidance_kwargs['guidance_attn_keys']}"
 
     for index, t in enumerate(tqdm(scheduler.timesteps, disable=not show_progress)):
         # expand the latents if we are doing classifier-free guidance to avoid doing two forward passes.
-        
+
         if bboxes:
             if use_boxdiff:
                 latents, loss = boxdiff.latent_backward_guidance_boxdiff(scheduler, unet, cond_embeddings, index, bboxes, object_positions, t, latents, loss, cross_attention_kwargs=guidance_cross_attention_kwargs, **semantic_guidance_kwargs)
             else:
                 # If encountered None in `guidance_attn_keys`, please be sure to check whether `guidance_attn_keys` is added in `semantic_guidance_kwargs`. Default value has been removed.
                 latents, loss = latent_backward_guidance(scheduler, unet, cond_embeddings, index, bboxes, object_positions, t, latents, loss, cross_attention_kwargs=guidance_cross_attention_kwargs, **semantic_guidance_kwargs)
-        
+
         # predict the noise residual
         with torch.no_grad():
             latent_model_input = torch.cat([latents] * 2)
             latent_model_input = scheduler.scale_model_input(latent_model_input, timestep=t)
-            
+
             main_cross_attention_kwargs['save_attn_to_dict'] = {}
-            
+
             unet_output = unet(latent_model_input, t, encoder_hidden_states=text_embeddings, return_cross_attention_probs=return_cross_attn, cross_attention_kwargs=main_cross_attention_kwargs)
             noise_pred = unet_output.sample
-            
+
             if return_cross_attn:
                 cross_attention_probs_down.append(unet_output.cross_attention_probs_down)
                 cross_attention_probs_mid.append(unet_output.cross_attention_probs_mid)
                 cross_attention_probs_up.append(unet_output.cross_attention_probs_up)
-                
+
             if return_saved_cross_attn:
                 saved_attns.append(main_cross_attention_kwargs['save_attn_to_dict'])
-                
+
                 del main_cross_attention_kwargs['save_attn_to_dict']
 
         # perform guidance
@@ -219,21 +209,21 @@ def generate_semantic_guidance(model_dict, latents, input_embeddings, num_infere
 
         # compute the previous noisy sample x_t -> x_t-1
         latents = scheduler.step(noise_pred, t, latents).prev_sample
-        
+
         if save_all_latents:
             if offload_latents_to_cpu:
                 latents_all.append(latents.cpu())
             else:
                 latents_all.append(latents)
-    
+
     if dynamic_num_inference_steps:
         # Restore num_inference_steps to avoid confusion in the next generation if it is not dynamic
         scheduler.num_inference_steps = original_num_inference_steps
-    
+
     images = decode(vae, latents)
-    
+
     ret = [latents, images]
-    
+
     if return_cross_attn:
         ret.append((cross_attention_probs_down, cross_attention_probs_mid, cross_attention_probs_up))
     if return_saved_cross_attn:
@@ -284,16 +274,16 @@ def gligen_enable_fuser(unet, enabled=True):
 
 def prepare_gligen_condition(bboxes, phrases, dtype, tokenizer, text_encoder, num_images_per_prompt):
     batch_size = len(bboxes)
-    
+
     assert len(phrases) == len(bboxes)
     max_objs = 30
-    
-    n_objs = min(max([len(bboxes_item) for bboxes_item in bboxes]), max_objs)
+
+    n_objs = min(max(len(bboxes_item) for bboxes_item in bboxes), max_objs)
     boxes = torch.zeros((batch_size, max_objs, 4), device=torch_device, dtype=dtype)
     phrase_embeddings = torch.zeros((batch_size, max_objs, 768), device=torch_device, dtype=dtype)
     # masks is a 1D tensor deciding which of the enteries to be enabled
     masks = torch.zeros((batch_size, max_objs), device=torch_device, dtype=dtype)
-    
+
     if n_objs > 0:
         for idx, (bboxes_item, phrases_item) in enumerate(zip(bboxes, phrases)):
             # the length of `bboxes_item` could be smaller than `n_objs` because n_objs takes the max of item length
@@ -304,7 +294,7 @@ def prepare_gligen_condition(bboxes, phrases, dtype, tokenizer, text_encoder, nu
             _phrase_embeddings = text_encoder(**tokenizer_inputs).pooler_output
             phrase_embeddings[idx, :_phrase_embeddings.shape[0]] = _phrase_embeddings
             assert bboxes_item.shape[0] == _phrase_embeddings.shape[0], f"{bboxes_item.shape[0]} != {_phrase_embeddings.shape[0]}"
-            
+
             masks[idx, :bboxes_item.shape[0]] = 1
 
     # Classifier-free guidance
@@ -315,9 +305,9 @@ def prepare_gligen_condition(bboxes, phrases, dtype, tokenizer, text_encoder, nu
     phrase_embeddings = phrase_embeddings.repeat(repeat_times, 1, 1)
     masks = masks.repeat(repeat_times, 1)
     masks[:condition_len // 2] = 0
-    
+
     # print("shapes:", boxes.shape, phrase_embeddings.shape, masks.shape)
-    
+
     return boxes, phrase_embeddings, masks, condition_len
 
 @torch.no_grad()
@@ -334,33 +324,29 @@ def generate_gligen(model_dict, latents, input_embeddings, num_inference_steps, 
         Disabled: bboxes and phrases should be a list of bboxes and phrases specifying the bboxes/phrases of one image (no batch dimension).
     """
     vae, tokenizer, text_encoder, unet, scheduler, dtype = model_dict.vae, model_dict.tokenizer, model_dict.text_encoder, model_dict.unet, model_dict.scheduler, model_dict.dtype
-    
+
     text_embeddings, _, cond_embeddings = process_input_embeddings(input_embeddings)
-    
+
     if latents.dim() == 5:
         # latents_all from the input side, different from the latents_all to be saved
         latents_all_input = latents
         latents = latents[0]
     else:
         latents_all_input = None
-    
+
     # Just in case that we have in-place ops
     latents = latents.clone()
-    
+
     if save_all_latents:
         # offload to cpu to save space
-        if offload_latents_to_cpu:
-            latents_all = [latents.cpu()]
-        else:
-            latents_all = [latents]
-    
+        latents_all = [latents.cpu()] if offload_latents_to_cpu else [latents]
     scheduler.set_timesteps(num_inference_steps)
     if fast_after_steps is not None:
         scheduler.timesteps = schedule.get_fast_schedule(scheduler.timesteps, fast_after_steps, fast_rate)
-    
+
     if dynamic_num_inference_steps:
         original_num_inference_steps = scheduler.num_inference_steps
-    
+
     if frozen_mask is not None:
         frozen_mask = frozen_mask.to(dtype=dtype).clamp(0., 1.)
 
@@ -368,9 +354,9 @@ def generate_gligen(model_dict, latents, input_embeddings, num_inference_steps, 
     if not batched_condition:
         # Add batch dimension to bboxes and phrases
         bboxes, phrases = [bboxes], [phrases]
-    
+
     boxes, phrase_embeddings, masks, condition_len = prepare_gligen_condition(bboxes, phrases, dtype, tokenizer, text_encoder, num_images_per_prompt)
-    
+
     if semantic_guidance_bboxes and semantic_guidance:
         loss = torch.tensor(10000.)
         # TODO: we can also save necessary tokens only to save memory.
@@ -387,10 +373,10 @@ def generate_gligen(model_dict, latents, input_embeddings, num_inference_steps, 
                 }
             }
         }
-    
+
     if return_saved_cross_attn:
         saved_attns = []
-    
+
     main_cross_attention_kwargs = {
         'offload_cross_attn_to_cpu': offload_cross_attn_to_cpu,
         'return_cond_ca_only': return_cond_ca_only,
@@ -402,7 +388,7 @@ def generate_gligen(model_dict, latents, input_embeddings, num_inference_steps, 
             'masks': masks
         }
     }
-    
+
     timesteps = scheduler.timesteps
 
     num_grounding_steps = int(gligen_scheduled_sampling_beta * len(timesteps))
@@ -412,7 +398,7 @@ def generate_gligen(model_dict, latents, input_embeddings, num_inference_steps, 
         # Scheduled sampling
         if index == num_grounding_steps:
             gligen_enable_fuser(unet, False)
-        
+
         if semantic_guidance_bboxes and semantic_guidance:
             with torch.enable_grad():
                 latents, loss = latent_backward_guidance(scheduler, unet, cond_embeddings, index, semantic_guidance_bboxes, semantic_guidance_object_positions, t, latents, loss, cross_attention_kwargs=guidance_cross_attention_kwargs, **semantic_guidance_kwargs)
@@ -426,10 +412,10 @@ def generate_gligen(model_dict, latents, input_embeddings, num_inference_steps, 
         # predict the noise residual
         noise_pred = unet(latent_model_input, t, encoder_hidden_states=text_embeddings, 
                             cross_attention_kwargs=main_cross_attention_kwargs).sample
-        
+
         if return_saved_cross_attn:
             saved_attns.append(main_cross_attention_kwargs['save_attn_to_dict'])
-            
+
             del main_cross_attention_kwargs['save_attn_to_dict']
 
         # perform guidance
@@ -441,10 +427,10 @@ def generate_gligen(model_dict, latents, input_embeddings, num_inference_steps, 
 
         # compute the previous noisy sample x_t -> x_t-1
         latents = scheduler.step(noise_pred, t, latents).prev_sample
-        
+
         if frozen_mask is not None and index < frozen_steps:
             latents = latents_all_input[index+1] * frozen_mask + latents * (1. - frozen_mask)
-        
+
         # Do not save the latents in the fast steps
         if save_all_latents and (fast_after_steps is None or index < fast_after_steps):
             if offload_latents_to_cpu:
@@ -459,7 +445,7 @@ def generate_gligen(model_dict, latents, input_embeddings, num_inference_steps, 
     # Turn off fuser for typical SD
     gligen_enable_fuser(unet, False)
     images = decode(vae, latents)
-    
+
     ret = [latents, images]
     if return_saved_cross_attn:
         ret.append(saved_attns)
@@ -469,7 +455,7 @@ def generate_gligen(model_dict, latents, input_embeddings, num_inference_steps, 
     if save_all_latents:
         latents_all = torch.stack(latents_all, dim=0)
         ret.append(latents_all)
-    
+
     return tuple(ret)
 
 

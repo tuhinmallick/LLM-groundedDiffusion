@@ -63,27 +63,24 @@ def load_sd(key="runwayml/stable-diffusion-v1-5", use_fp16=False, load_inverse_s
 def encode_prompts(tokenizer, text_encoder, prompts, negative_prompt="", return_full_only=False, one_uncond_input_only=False):
     if negative_prompt == "":
         print("Note that negative_prompt is an empty string")
-    
+
     text_input = tokenizer(
         prompts, padding="max_length", max_length=tokenizer.model_max_length, truncation=True, return_tensors="pt"
     )
-    
+
     max_length = text_input.input_ids.shape[-1]
-    if one_uncond_input_only:
-        num_uncond_input = 1
-    else:
-        num_uncond_input = len(prompts)
+    num_uncond_input = 1 if one_uncond_input_only else len(prompts)
     uncond_input = tokenizer([negative_prompt] * num_uncond_input, padding="max_length", max_length=max_length, return_tensors="pt")
 
     with torch.no_grad():
         uncond_embeddings = text_encoder(uncond_input.input_ids.to(torch_device))[0]
         cond_embeddings = text_encoder(text_input.input_ids.to(torch_device))[0]
-    
+
     if one_uncond_input_only:
         return uncond_embeddings, cond_embeddings
-    
+
     text_embeddings = torch.cat([uncond_embeddings, cond_embeddings])
-    
+
     if return_full_only:
         return text_embeddings
     return text_embeddings, uncond_embeddings, cond_embeddings

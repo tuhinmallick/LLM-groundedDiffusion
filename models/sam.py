@@ -14,11 +14,7 @@ def load_sam():
     sam_model = SamModel.from_pretrained("facebook/sam-vit-base").to(torch_device)
     sam_processor = SamProcessor.from_pretrained("facebook/sam-vit-base")
 
-    sam_model_dict = dict(
-        sam_model = sam_model, sam_processor = sam_processor
-    )
-
-    return sam_model_dict
+    return dict(sam_model=sam_model, sam_processor=sam_processor)
 
 # Not fully backward compatible with the previous implementation
 # Reference: lmdv2/notebooks/gen_masked_latents_multi_object_ref_ca_loss_modular.ipynb
@@ -67,31 +63,29 @@ def get_iou_with_resize(mask, masks, masks_shape):
 def select_mask(masks, conf_scores, coarse_ious=None, rule="largest_over_conf", discourage_mask_below_confidence=0.85, discourage_mask_below_coarse_iou=0.2, verbose=False):
     """masks: numpy bool array"""
     mask_sizes = masks.sum(axis=(1, 2))
-    
-    # Another possible rule: iou with the attention mask
-    if rule == "largest_over_conf":
-        # Use the largest segmentation
-        # Discourage selecting masks with conf too low or coarse iou is too low
-        max_mask_size = np.max(mask_sizes)
-        if coarse_ious is not None:
-            scores = mask_sizes - (conf_scores < discourage_mask_below_confidence) * max_mask_size - (coarse_ious < discourage_mask_below_coarse_iou) * max_mask_size
-        else:
-            scores = mask_sizes - (conf_scores < discourage_mask_below_confidence) * max_mask_size
-        if verbose:
-            print(f"mask_sizes: {mask_sizes}, scores: {scores}")
-    else:
+
+    if rule != "largest_over_conf":
         raise ValueError(f"Unknown rule: {rule}")
 
+    # Use the largest segmentation
+    # Discourage selecting masks with conf too low or coarse iou is too low
+    max_mask_size = np.max(mask_sizes)
+    scores = (
+        mask_sizes
+        - (conf_scores < discourage_mask_below_confidence) * max_mask_size
+        - (coarse_ious < discourage_mask_below_coarse_iou) * max_mask_size
+        if coarse_ious is not None
+        else mask_sizes
+        - (conf_scores < discourage_mask_below_confidence) * max_mask_size
+    )
+    if verbose:
+        print(f"mask_sizes: {mask_sizes}, scores: {scores}")
     mask_id = np.argmax(scores)
     mask = masks[mask_id]
-    
-    selection_conf = conf_scores[mask_id]
-    
-    if coarse_ious is not None:
-        selection_coarse_iou = coarse_ious[mask_id]
-    else:
-        selection_coarse_iou = None
 
+    selection_conf = conf_scores[mask_id]
+
+    selection_coarse_iou = None if coarse_ious is None else coarse_ious[mask_id]
     if verbose:
         # print(f"Confidences: {conf_scores}")
         print(f"Selected a mask with confidence: {selection_conf}, coarse_iou: {selection_coarse_iou}")
@@ -129,7 +123,13 @@ def sam_refine_attn(sam_input_image, token_attn_np, model_dict, height, width, H
 
     if verbose >= 2:
         # Visualize one token only
-        vis.visualize_arrays([(token_attn_np, f"token_attn_np"), (token_attn_np_smooth, f"token_attn_np_smooth")], colorbar_index=1)
+        vis.visualize_arrays(
+            [
+                (token_attn_np, "token_attn_np"),
+                (token_attn_np_smooth, "token_attn_np_smooth"),
+            ],
+            colorbar_index=1,
+        )
 
     # (w, h)
     mask_size_scale = height // token_attn_np_smooth.shape[1], width // token_attn_np_smooth.shape[0]
@@ -152,15 +152,15 @@ def sam_refine_attn(sam_input_image, token_attn_np, model_dict, height, width, H
         input_points = [[[max_coord[1] * mask_size_scale[1], max_coord[0] * mask_size_scale[0]]]]
 
         masks, conf_scores = sam_point_input(model_dict, image=sam_input_image, input_points=input_points, target_mask_shape=(H, W))
-        
+
     if verbose >= 2:
         plt.title("Coarse binary mask (for getting the box with box input and for iou)")
         plt.imshow(mask_binary)
         plt.show()
-    
+
     # Assuming one image, one three-masks per image (so we have indexing twice)
     three_masks = masks[0][0]
-    
+
     coarse_ious = get_iou_with_resize(mask_binary, three_masks, masks_shape=mask_binary.shape)
 
     mask_selected, conf_score_selected = select_mask(three_masks, conf_scores, coarse_ious=coarse_ious, 

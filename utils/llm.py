@@ -26,24 +26,22 @@ def get_full_model_name(model):
 
 def get_llm_kwargs(model, template_version):
     model = get_full_model_name(model)
-        
+
     print(f"Using template: {template_version}")
 
     template = templates[template_version]
 
     if "vicuna" in model.lower() or "llama" in model.lower() or "freewilly" in model.lower() or "stablebeluga2" in model.lower():
         api_base = "http://localhost:8000/v1"
-        max_tokens = 900
-        temperature = 0.25
         headers = {}
     else:
         from utils.api_key import api_key
-        
+
         api_base = "https://api.openai.com/v1"
-        max_tokens = 900
-        temperature = 0.25
         headers = {"Authorization": f"Bearer {api_key}"}
 
+    temperature = 0.25
+    max_tokens = 900
     llm_kwargs = EasyDict(model=model, template=template, api_base=api_base, max_tokens=max_tokens, temperature=temperature, headers=headers, stop=stop)
 
     return model, llm_kwargs
@@ -85,12 +83,11 @@ def get_layout(prompt, llm_kwargs, suffix=""):
             print("Exiting due to many non-successful attempts")
             exit()
 
-    if "gpt" in model:
-        response = r.json()['choices'][0]['message']['content']
-    else:
-        response = r.json()['choices'][0]['text']
-
-    return response
+    return (
+        r.json()['choices'][0]['message']['content']
+        if "gpt" in model
+        else r.json()['choices'][0]['text']
+    )
 
 
 def get_layout_with_cache(prompt, *args, **kwargs):

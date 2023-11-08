@@ -15,11 +15,11 @@ def get_token_attnv2(token_id, saved_attns, attn_key, attn_aggregation_step_star
     saved_attns = saved_attns[attn_aggregation_step_start:]    
 
     saved_attns = [saved_attn[attn_key].cpu() for saved_attn in saved_attns]
-    
+
     attn = torch.stack(saved_attns, dim=0).mean(dim=0)
-    
+
     # print("attn shape", attn.shape)
-    
+
     # attn: (batch, head, spatial, text)
 
     if not input_ca_has_condition_only:
@@ -31,11 +31,8 @@ def get_token_attnv2(token_id, saved_attns, attn_key, attn_aggregation_step_star
     attn = attn.mean(dim=0)[:, token_id]
     H = W = int(math.sqrt(attn.shape[0]))
     attn = attn.reshape((H, W))
-    
-    if return_np:
-        return attn.numpy()
 
-    return attn
+    return attn.numpy() if return_np else attn
 
 def shift_saved_attns_item(saved_attns_item, offset, guidance_attn_keys, horizontal_shift_only=False):
     """
@@ -64,10 +61,12 @@ def shift_saved_attns_item(saved_attns_item, offset, guidance_attn_keys, horizon
     return new_saved_attns_item
 
 def shift_saved_attns(saved_attns, offset, guidance_attn_keys, **kwargs):
-    # Iterate over timesteps
-    shifted_saved_attns = [shift_saved_attns_item(saved_attns_item, offset, guidance_attn_keys, **kwargs) for saved_attns_item in saved_attns]
-    
-    return shifted_saved_attns
+    return [
+        shift_saved_attns_item(
+            saved_attns_item, offset, guidance_attn_keys, **kwargs
+        )
+        for saved_attns_item in saved_attns
+    ]
 
 
 class GaussianSmoothing(nn.Module):
@@ -105,7 +104,7 @@ class GaussianSmoothing(nn.Module):
         for size, std, mgrid in zip(kernel_size, sigma, meshgrids):
             mean = (size - 1) / 2
             kernel *= 1 / (std * math.sqrt(2 * math.pi)) * \
-                torch.exp(-((mgrid - mean) / (2 * std)) ** 2)
+                    torch.exp(-((mgrid - mean) / (2 * std)) ** 2)
 
         # Make sure sum of values in gaussian kernel equals 1.
         kernel = kernel / torch.sum(kernel)
@@ -125,8 +124,7 @@ class GaussianSmoothing(nn.Module):
             self.conv = F.conv3d
         else:
             raise RuntimeError(
-                'Only 1, 2 and 3 dimensions are supported. Received {}.'.format(
-                    dim)
+                f'Only 1, 2 and 3 dimensions are supported. Received {dim}.'
             )
 
     def forward(self, input):

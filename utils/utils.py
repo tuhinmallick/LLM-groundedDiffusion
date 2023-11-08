@@ -46,10 +46,7 @@ def get_centered_box(box, horizontal_center_only=True, vertical_placement='cente
 # NOTE: this changes the behavior of the function
 def proportion_to_mask(obj_box, H, W, use_legacy=False, return_np=False):
     x_min, y_min, x_max, y_max = scale_proportion(obj_box, H, W, use_legacy)
-    if return_np:
-        mask = np.zeros((H, W))
-    else:
-        mask = torch.zeros(H, W).to(torch_device)
+    mask = np.zeros((H, W)) if return_np else torch.zeros(H, W).to(torch_device)
     mask[y_min: y_max, x_min: x_max] = 1.
 
     return mask
@@ -83,9 +80,7 @@ def binary_mask_to_box(mask, enlarge_box_by_one=True, w_scale=1, h_scale=1):
     else:
         ymin, ymax = min(mask_loc[0]), max(mask_loc[0])
         xmin, xmax = min(mask_loc[1]), max(mask_loc[1])
-    box = [xmin * w_scale, ymin * h_scale, xmax * w_scale, ymax * h_scale]
-
-    return box
+    return [xmin * w_scale, ymin * h_scale, xmax * w_scale, ymax * h_scale]
 
 def binary_mask_to_box_mask(mask, to_device=True):
     box = binary_mask_to_box(mask)

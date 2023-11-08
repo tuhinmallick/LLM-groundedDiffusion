@@ -115,10 +115,3 @@ if __name__ == "__main__":
 
     prompt_full = templatev0_1.format(prompt=prompt.strip().rstrip("."))
     print(prompt_full)
-
-    if False:
-        # Useful if you want to query an LLM with JSON input
-        
-        import json
-
-        print(json.dumps(prompt_full.strip("\n")))

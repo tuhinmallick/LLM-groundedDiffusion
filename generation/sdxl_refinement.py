@@ -24,7 +24,11 @@ def refine(image, spec, refine_seed, refinement_step_ratio=0.5):
     extra_neg_prompt = spec["extra_neg_prompt"]
     g = torch.manual_seed(refine_seed)
     image = Image.fromarray(image).resize((1024, 1024), Image.LANCZOS)
-    negative_prompt = extra_neg_prompt + ", " + sdxl_negative_prompt
-    output = pipe(overall_prompt, image=image, negative_prompt=negative_prompt, strength=refinement_step_ratio, generator=g).images[0]
-    
-    return output
+    negative_prompt = f"{extra_neg_prompt}, {sdxl_negative_prompt}"
+    return pipe(
+        overall_prompt,
+        image=image,
+        negative_prompt=negative_prompt,
+        strength=refinement_step_ratio,
+        generator=g,
+    ).images[0]

@@ -75,7 +75,7 @@ if __name__ == "__main__":
         eval_type, eval_success = eval_prompt(prompt, args.prompt_type, path, processor, owl_vit_model, score_threshold=args.detection_score_threshold,
                                               nms_threshold=args.nms_threshold, use_class_aware_nms=args.class_aware_nms, use_cuda=use_cuda, verbose=args.verbose)
 
-        print(f"Eval success (eval_type):", eval_success)
+        print("Eval success (eval_type):", eval_success)
 
         if eval_type not in eval_all_counts:
             eval_success_counts[eval_type] = 0
@@ -85,7 +85,7 @@ if __name__ == "__main__":
 
     summary = []
     eval_success_conut, eval_all_count = 0, 0
-    for k, v in eval_all_counts.items():
+    for k in eval_all_counts:
         rate = eval_success_counts[k]/eval_all_counts[k]
         print(
             f"Eval type: {k}, success: {eval_success_counts[k]}/{eval_all_counts[k]}, rate: {round(rate, 2):.2f}")

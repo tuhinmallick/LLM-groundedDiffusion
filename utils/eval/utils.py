@@ -8,11 +8,7 @@ p = inflect.engine()
 # Credit: GPT
 def find_word_after(text, word):
     pattern = r"\b" + re.escape(word) + r"\s+(.+)"
-    match = re.search(pattern, text)
-    if match:
-        return match.group(1)
-    else:
-        return None
+    return match.group(1) if (match := re.search(pattern, text)) else None
 
 
 word_to_num_mapping = {p.number_to_words(i): i for i in range(1, 21)}
@@ -35,15 +31,19 @@ locations_xywh = {
 
 def singular(noun):
     singular_noun = p.singular_noun(noun)
-    if singular_noun is False:
-        return noun
-    return singular_noun
+    return noun if singular_noun is False else singular_noun
 
 
 def get_box(gen_boxes, name_include):
     # This prevents substring match on non-word boundaries: carrot vs car
-    box_match = [any([((name_include_item + ' ') in box['name'] or box['name'].endswith(name_include_item))
-                     for name_include_item in name_include]) for box in gen_boxes]
+    box_match = [
+        any(
+            f'{name_include_item} ' in box['name']
+            or box['name'].endswith(name_include_item)
+            for name_include_item in name_include
+        )
+        for box in gen_boxes
+    ]
 
     if not any(box_match):
         return None
@@ -53,9 +53,13 @@ def get_box(gen_boxes, name_include):
 
 
 def count(gen_boxes, name_include):
-    return sum([
-        any([name_include_item in box['name'] for name_include_item in name_include]) for box in gen_boxes
-    ])
+    return sum(
+        any(
+            name_include_item in box['name']
+            for name_include_item in name_include
+        )
+        for box in gen_boxes
+    )
 
 
 def predicate_numeracy(query_names, intended_count, gen_boxes, verbose=False):
